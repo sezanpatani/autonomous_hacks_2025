@@ -1,12 +1,21 @@
 'use client'
 
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect, useState } from 'react'
-import { ESG_DATA } from '@/data/mockData'
+import { useRealtimeMetrics } from '@/lib/hooks'
+import { useAppStore } from '@/store/appStore'
+import { Activity } from 'lucide-react'
 
 export default function ESGScoreMeter() {
+  const { cityName } = useAppStore()
+  const { data: metricsData, loading, isLive, lastUpdate } = useRealtimeMetrics(cityName)
   const [score, setScore] = useState(0)
-  const targetScore = ESG_DATA.overall
+  const [isPulsing, setIsPulsing] = useState(false)
+  
+  // Safely extract score with proper type checking
+  const targetScore = typeof metricsData?.overall?.score === 'number' 
+    ? Math.round(metricsData.overall.score) 
+    : (typeof metricsData?.overall === 'number' ? Math.round(metricsData.overall) : 72)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -16,6 +25,15 @@ export default function ESGScoreMeter() {
     }, 20)
     return () => clearTimeout(timer)
   }, [score, targetScore])
+
+  // Trigger pulse animation when data updates
+  useEffect(() => {
+    if (lastUpdate) {
+      setIsPulsing(true)
+      const timer = setTimeout(() => setIsPulsing(false), 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [lastUpdate])
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return '#10b981'
@@ -31,13 +49,41 @@ export default function ESGScoreMeter() {
     return 'Needs Improvement'
   }
 
+  if (loading) {
+    return (
+      <div className="relative bg-white rounded-3xl shadow-xl p-8 animate-pulse">
+        <div className="h-64 flex items-center justify-center">
+          <div className="text-gray-400">Loading ESG metrics...</div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <motion.div
       initial={{ scale: 0.8, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       transition={{ type: 'spring', stiffness: 200 }}
-      className="relative bg-white rounded-3xl shadow-xl p-8 overflow-hidden"
+      className={`relative bg-white rounded-3xl shadow-xl p-8 overflow-hidden ${
+        isPulsing ? 'ring-4 ring-green-400 ring-opacity-50' : ''
+      }`}
     >
+      {/* LIVE Indicator */}
+      {isLive && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute top-4 right-4 flex items-center gap-2 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-semibold"
+        >
+          <motion.div
+            animate={{ scale: [1, 1.3, 1] }}
+            transition={{ repeat: Infinity, duration: 2 }}
+            className="w-2 h-2 bg-white rounded-full"
+          />
+          LIVE
+        </motion.div>
+      )}
+
       {/* Animated Background */}
       <div className="absolute inset-0 opacity-10">
         <div className="absolute top-0 left-0 w-64 h-64 bg-green-400 rounded-full blur-3xl animate-pulse-slow" />
@@ -49,7 +95,7 @@ export default function ESGScoreMeter() {
         <div className="flex-shrink-0">
           <motion.div
             initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
+            animate={{ scale: isPulsing ? [1, 1.05, 1] : 1 }}
             transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
             className="relative"
           >
@@ -132,9 +178,21 @@ export default function ESGScoreMeter() {
           {/* Sub-scores */}
           <div className="grid grid-cols-3 gap-4">
             {[
-              { label: 'Environment', score: ESG_DATA.environment.score, color: '#10b981' },
-              { label: 'Social', score: ESG_DATA.social.score, color: '#3b82f6' },
-              { label: 'Governance', score: ESG_DATA.governance.score, color: '#8b5cf6' },
+              { 
+                label: 'Environment', 
+                score: Math.round(Number(metricsData?.environment?.score) || 75), 
+                color: '#10b981' 
+              },
+              { 
+                label: 'Social', 
+                score: Math.round(Number(metricsData?.social?.score) || 72), 
+                color: '#3b82f6' 
+              },
+              { 
+                label: 'Governance', 
+                score: Math.round(Number(metricsData?.governance?.score) || 68), 
+                color: '#8b5cf6' 
+              },
             ].map((item, index) => (
               <motion.div
                 key={item.label}

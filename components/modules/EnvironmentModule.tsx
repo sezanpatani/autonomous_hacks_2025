@@ -1,12 +1,32 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Wind, Droplets, Zap, Recycle, Trees, AlertTriangle } from 'lucide-react'
-import { ESG_DATA } from '@/data/mockData'
+import { Wind, Droplets, Zap, Recycle, Trees, AlertTriangle, Leaf } from 'lucide-react'
+import { useESGMetrics } from '@/lib/hooks'
+import { useAppStore } from '@/store/appStore'
 import { useState } from 'react'
 
 export default function EnvironmentModule() {
+  const { cityName } = useAppStore()
+  const { data: metricsData, loading } = useESGMetrics(cityName)
   const [simulationValue, setSimulationValue] = useState(50)
+
+  if (loading) {
+    return <div className="text-center py-20">Loading environment data...</div>
+  }
+
+  const ESG_DATA = metricsData || {
+    environment: {
+      score: 72,
+      wasteRecycling: 45,
+      zones: [
+        { id: 1, name: 'Zone-1', aqi: 145, status: 'moderate', population: 125000 },
+        { id: 2, name: 'Zone-2', aqi: 168, status: 'unhealthy', population: 98000 },
+        { id: 3, name: 'Zone-3', aqi: 132, status: 'moderate', population: 110000 },
+        { id: 4, name: 'Zone-4', aqi: 151, status: 'unhealthy', population: 87000 }
+      ]
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -28,7 +48,7 @@ export default function EnvironmentModule() {
             <p className="text-green-100">Air, Water, Energy & Waste Management</p>
           </div>
         </div>
-        <div className="text-5xl font-bold">{ESG_DATA.environment.score}</div>
+        <div className="text-5xl font-bold">{ESG_DATA.environment?.score || 72}</div>
       </motion.div>
 
       {/* AQI Zones with Pollution Clouds */}
@@ -42,7 +62,7 @@ export default function EnvironmentModule() {
           Air Quality by Zone
         </h2>
         <div className="space-y-4">
-          {ESG_DATA.environment.zones.map((zone, index) => (
+          {(ESG_DATA.environment?.zones || []).map((zone: any, index: number) => (
             <motion.div
               key={zone.id}
               initial={{ x: -50, opacity: 0 }}
@@ -136,7 +156,7 @@ export default function EnvironmentModule() {
             ))}
             <div className="relative z-10 flex items-center justify-center h-full">
               <div className="text-center text-white">
-                <div className="text-5xl font-bold">{ESG_DATA.environment.waterQuality}%</div>
+                <div className="text-5xl font-bold">{ESG_DATA?.environment?.waterQuality || 0}%</div>
                 <div className="text-sm mt-2">Quality Score</div>
               </div>
             </div>
@@ -176,7 +196,7 @@ export default function EnvironmentModule() {
             ))}
             <div className="relative z-10 flex items-center justify-center h-full">
               <div className="text-center text-gray-800">
-                <div className="text-5xl font-bold">{ESG_DATA.environment.energyEfficiency}%</div>
+                <div className="text-5xl font-bold">{ESG_DATA?.environment?.energyEfficiency || 0}%</div>
                 <div className="text-sm mt-2">Efficiency Rate</div>
               </div>
             </div>
@@ -199,7 +219,7 @@ export default function EnvironmentModule() {
         <div className="relative h-32 bg-gray-100 rounded-xl overflow-hidden mb-4">
           <motion.div
             initial={{ width: 0 }}
-            animate={{ width: `${ESG_DATA.environment.wasteRecycling}%` }}
+            animate={{ width: `${ESG_DATA?.environment?.wasteRecycling || 0}%` }}
             transition={{ duration: 1.5, ease: 'easeOut' }}
             className="h-full bg-gradient-to-r from-green-400 to-green-600 flex items-center justify-end pr-4"
           >
@@ -212,13 +232,13 @@ export default function EnvironmentModule() {
           </motion.div>
           <div className="absolute inset-0 flex items-center justify-center">
             <span className="text-3xl font-bold text-gray-700">
-              {ESG_DATA.environment.wasteRecycling}%
+              {ESG_DATA.environment?.wasteRecycling || 45}%
             </span>
           </div>
         </div>
 
         <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-600">Current: {ESG_DATA.environment.wasteRecycling}%</span>
+          <span className="text-gray-600">Current: {ESG_DATA.environment?.wasteRecycling || 45}%</span>
           <span className="text-green-600 font-semibold">Target: 60%</span>
         </div>
       </motion.div>
@@ -267,8 +287,4 @@ export default function EnvironmentModule() {
       </motion.div>
     </div>
   )
-}
-
-function Leaf({ className, ...props }: any) {
-  return <Trees className={className} {...props} />
 }

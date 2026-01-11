@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { TrendingUp, Brain, Zap, AlertTriangle } from 'lucide-react'
+import { TrendingUp, Brain, Zap, AlertTriangle, Activity } from 'lucide-react'
 import { Line } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
@@ -16,7 +16,8 @@ import {
 } from 'chart.js'
 import { PredictiveEngine } from '@/lib/aiEngine'
 import { useState, useEffect } from 'react'
-import { ESG_DATA } from '@/data/mockData'
+import { useRealtimeMetrics } from '@/lib/hooks'
+import { useAppStore } from '@/store/appStore'
 
 ChartJS.register(
   CategoryScale,
@@ -26,24 +27,38 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler
 )
 
 export default function PredictiveForecastingEngine() {
+  const { cityName } = useAppStore()
+  const { data: metricsData, loading, isLive, lastUpdate } = useRealtimeMetrics(cityName)
   const [timeframe, setTimeframe] = useState<3 | 6 | 12>(6)
   const [forecastData, setForecastData] = useState<number[]>([])
   const [pollutionSpikes, setPollutionSpikes] = useState<any[]>([])
+  const [isUpdating, setIsUpdating] = useState(false)
 
   useEffect(() => {
-    const forecast = PredictiveEngine.forecastESG(ESG_DATA.overall, timeframe)
+    if (!metricsData) return
+    
+    // Trigger update animation
+    setIsUpdating(true)
+    const timer = setTimeout(() => setIsUpdating(false), 800)
+    
+    const forecast = PredictiveEngine.forecastESG(metricsData.overall?.score || 72, timeframe)
     setForecastData(forecast)
     
     const spikes = PredictiveEngine.predictPollutionSpikes(
-      ESG_DATA.environment.zones,
+      metricsData.environment?.zones || [],
       timeframe
     )
     setPollutionSpikes(spikes)
-  }, [timeframe])
+    
+    return () => clearTimeout(timer)
+  }, [timeframe, metricsData])
+
+  if (loading) {
+    return <div className="text-center py-20">Loading forecast engine...</div>
+  }
 
   const chartData = {
     labels: ['Now', ...Array.from({ length: timeframe }, (_, i) => `Month ${i + 1}`)],
@@ -109,17 +124,34 @@ export default function PredictiveForecastingEngine() {
         animate={{ opacity: 1, y: 0 }}
         className="bg-gradient-to-r from-purple-500 to-pink-600 rounded-3xl p-8 text-white shadow-xl"
       >
-        <div className="flex items-center gap-4 mb-4">
-          <motion.div
-            animate={{ rotate: [0, 360] }}
-            transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-          >
-            <Brain className="w-12 h-12" />
-          </motion.div>
-          <div>
-            <h1 className="text-3xl font-bold">AI Predictive Forecasting Engine</h1>
-            <p className="text-purple-100">LSTM-powered temporal modeling & ensemble predictions</p>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-4">
+            <motion.div
+              animate={isUpdating ? { rotate: 360, scale: [1, 1.2, 1] } : { rotate: [0, 360] }}
+              transition={{ duration: isUpdating ? 0.8 : 3, repeat: isUpdating ? 0 : Infinity, ease: 'linear' }}
+            >
+              <Brain className="w-12 h-12" />
+            </motion.div>
+            <div>
+              <h1 className="text-3xl font-bold">AI Predictive Forecasting Engine</h1>
+              <p className="text-purple-100">LSTM-powered temporal modeling & ensemble predictions</p>
+            </div>
           </div>
+          {isLive && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-semibold"
+            >
+              <motion.div
+                animate={{ scale: [1, 1.4, 1] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+              >
+                <Activity size={16} />
+              </motion.div>
+              LIVE
+            </motion.div>
+          )}
         </div>
         <div className="flex items-center gap-4">
           <Zap className="w-6 h-6" />
@@ -165,7 +197,7 @@ export default function PredictiveForecastingEngine() {
           <div className="flex items-center gap-2 px-4 py-2 bg-green-100 rounded-lg">
             <TrendingUp className="text-green-600" size={20} />
             <span className="text-sm font-semibold text-green-700">
-              Predicted: {forecastData[forecastData.length - 1]?.toFixed(1)} (+{(forecastData[forecastData.length - 1] - ESG_DATA.overall).toFixed(1)})
+              Predicted: {forecastData[forecastData.length - 1]?.toFixed(1)} (+{(forecastData[forecastData.length - 1] - (metricsData?.overall?.score || 72)).toFixed(1)})
             </span>
           </div>
         </div>

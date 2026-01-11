@@ -2,9 +2,27 @@
 
 import { motion } from 'framer-motion'
 import { Building2, CheckCircle, Clock, FileText, TrendingUp, AlertCircle } from 'lucide-react'
-import { ESG_DATA } from '@/data/mockData'
+import { useESGMetrics } from '@/lib/hooks'
+import { useAppStore } from '@/store/appStore'
 
 export default function GovernanceModule() {
+  const { cityName } = useAppStore()
+  const { data: metricsData, loading } = useESGMetrics(cityName)
+
+  if (loading) {
+    return <div className="text-center py-20">Loading governance data...</div>
+  }
+
+  const ESG_DATA = metricsData || {
+    governance: {
+      score: 80,
+      transparency: 85,
+      compliance: 88,
+      budgetUtilization: 82,
+      responseTime: 76
+    }
+  }
+
   const complianceItems = [
     { name: 'Budget Transparency', status: 'completed', score: 92 },
     { name: 'Audit Reports', status: 'completed', score: 88 },
@@ -33,16 +51,16 @@ export default function GovernanceModule() {
             <p className="text-purple-100">Transparency, Compliance & Digital Services</p>
           </div>
         </div>
-        <div className="text-5xl font-bold">{ESG_DATA.governance.score}</div>
+        <div className="text-5xl font-bold">{ESG_DATA.governance?.score || 80}</div>
       </motion.div>
 
       {/* Key Metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Transparency', value: ESG_DATA.governance.transparency, icon: '🔍' },
-          { label: 'Compliance', value: ESG_DATA.governance.compliance, icon: '✅' },
-          { label: 'Budget Use', value: ESG_DATA.governance.budgetUtilization, icon: '💰' },
-          { label: 'Response Time', value: ESG_DATA.governance.responseTime, icon: '⚡' },
+          { label: 'Transparency', value: ESG_DATA.governance?.transparency || 85, icon: '🔍' },
+          { label: 'Compliance', value: ESG_DATA.governance?.compliance || 88, icon: '✅' },
+          { label: 'Budget Use', value: ESG_DATA.governance?.budgetUtilization || 82, icon: '💰' },
+          { label: 'Response Time', value: ESG_DATA.governance?.responseTime || 76, icon: '⚡' },
         ].map((metric, index) => (
           <motion.div
             key={metric.label}
@@ -139,7 +157,7 @@ export default function GovernanceModule() {
               transition={{ type: 'spring', stiffness: 200 }}
               className="text-6xl font-bold text-orange-600"
             >
-              {ESG_DATA.governance.pendingTasks}
+              {ESG_DATA?.governance?.pendingTasks || 0}
             </motion.div>
             <div className="text-sm text-gray-600 mb-2">tasks requiring attention</div>
           </div>
@@ -169,7 +187,7 @@ export default function GovernanceModule() {
               transition={{ type: 'spring', stiffness: 200 }}
               className="text-6xl font-bold text-green-600"
             >
-              {ESG_DATA.governance.completedTasks}
+              {ESG_DATA?.governance?.completedTasks || 0}
             </motion.div>
             <div className="text-sm text-gray-600 mb-2">tasks completed</div>
           </div>

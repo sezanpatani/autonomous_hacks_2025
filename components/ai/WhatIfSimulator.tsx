@@ -4,9 +4,12 @@ import { motion } from 'framer-motion'
 import { Lightbulb, TrendingUp, DollarSign, Leaf, Droplets, Bus } from 'lucide-react'
 import { useState } from 'react'
 import { ScenarioSimulator } from '@/lib/aiEngine'
-import { ESG_DATA } from '@/data/mockData'
+import { useESGMetrics } from '@/lib/hooks'
+import { useAppStore } from '@/store/appStore'
 
 export default function WhatIfSimulator() {
+  const { cityName } = useAppStore()
+  const { data: metricsData, loading } = useESGMetrics(cityName)
   const [activeScenario, setActiveScenario] = useState<'buses' | 'water' | 'waste'>('buses')
   
   // State for each scenario
@@ -14,10 +17,16 @@ export default function WhatIfSimulator() {
   const [waterTax, setWaterTax] = useState(10)
   const [wasteImprovement, setWasteImprovement] = useState(15)
   
+  if (loading) {
+    return <div className="text-center py-20">Loading simulator...</div>
+  }
+
+  const ESG_DATA = metricsData || {}
+  
   // Calculate results
-  const busResult = ScenarioSimulator.simulateEVBuses(ESG_DATA.environment.aqi, busCount)
-  const waterResult = ScenarioSimulator.simulateWaterTax(ESG_DATA.environment.waterQuality, waterTax)
-  const wasteResult = ScenarioSimulator.simulateWasteSegregation(ESG_DATA.environment.wasteRecycling, wasteImprovement)
+  const busResult = ScenarioSimulator.simulateEVBuses(ESG_DATA.environment?.aqi || 156, busCount)
+  const waterResult = ScenarioSimulator.simulateWaterTax(ESG_DATA.environment?.waterQuality || 75, waterTax)
+  const wasteResult = ScenarioSimulator.simulateWasteSegregation(ESG_DATA.environment?.wasteRecycling || 45, wasteImprovement)
 
   const scenarios = {
     buses: {
@@ -226,7 +235,7 @@ export default function WhatIfSimulator() {
               <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border-2 border-green-200">
                 <div className="text-sm text-gray-600 mb-1">New Recycling Rate</div>
                 <div className="text-3xl font-bold text-green-600">{wasteResult.newRecyclingRate}%</div>
-                <div className="text-xs text-gray-500 mt-1">Up from {ESG_DATA.environment.wasteRecycling}%</div>
+                <div className="text-xs text-gray-500 mt-1">Up from {ESG_DATA?.environment?.wasteRecycling || 0}%</div>
               </div>
               
               <div className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-200">

@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Brain, TrendingUp, Lightbulb, DollarSign, AlertTriangle, Activity, Bot, Camera, FileText, Sparkles } from 'lucide-react'
+import { Brain, TrendingUp, Lightbulb, DollarSign, AlertTriangle, Activity, Bot, Camera, FileText, Sparkles, History, Users } from 'lucide-react'
 import { useState } from 'react'
 import PredictiveForecastingEngine from './PredictiveForecastingEngine'
 import WhatIfSimulator from './WhatIfSimulator'
@@ -13,13 +13,39 @@ import AIMetricsDashboard from './AIMetricsDashboard'
 import MultiModalAIInputs from './MultiModalAIInputs'
 import AIPolicyGenerator from './AIPolicyGenerator'
 import ExplainableAIDashboard from './ExplainableAIDashboard'
+import ActionHistoryDashboard from './ActionHistoryDashboard'
+import MultiAgentOrchestrator from './MultiAgentOrchestrator'
 
-type AIModule = 'overview' | 'forecasting' | 'simulator' | 'causal' | 'agent' | 'budget' | 'warnings' | 'metrics' | 'multimodal' | 'policy' | 'xai'
+type AIModule = 'overview' | 'forecasting' | 'simulator' | 'causal' | 'agent' | 'budget' | 'warnings' | 'metrics' | 'multimodal' | 'policy' | 'xai' | 'history' | 'orchestrator'
 
 export default function AIHub() {
   const [activeModule, setActiveModule] = useState<AIModule>('overview')
 
   const modules = [
+    {
+      id: 'orchestrator' as AIModule,
+      name: 'Multi-Agent Orchestrator',
+      icon: Users,
+      color: 'from-indigo-500 to-purple-600',
+      description: '4 specialized agents working together',
+      badge: 'NEW'
+    },
+    {
+      id: 'agent' as AIModule,
+      name: 'Recommendation Agent',
+      icon: Bot,
+      color: 'from-cyan-500 to-blue-600',
+      description: 'Autonomous action execution',
+      badge: 'Execute'
+    },
+    {
+      id: 'history' as AIModule,
+      name: 'Action History',
+      icon: History,
+      color: 'from-purple-500 to-pink-600',
+      description: 'Executed actions log',
+      badge: 'Live'
+    },
     {
       id: 'forecasting' as AIModule,
       name: 'Predictive Forecasting',
@@ -43,14 +69,6 @@ export default function AIHub() {
       color: 'from-purple-500 to-indigo-600',
       description: 'Root cause identification',
       badge: 'Bayesian'
-    },
-    {
-      id: 'agent' as AIModule,
-      name: 'Recommendation Agent',
-      icon: Bot,
-      color: 'from-cyan-500 to-blue-600',
-      description: 'Autonomous action suggestions',
-      badge: 'Auto'
     },
     {
       id: 'budget' as AIModule,
@@ -104,14 +122,18 @@ export default function AIHub() {
 
   const renderModule = () => {
     switch (activeModule) {
+      case 'orchestrator':
+        return <MultiAgentOrchestrator />
+      case 'agent':
+        return <RecommendationAgentUI />
+      case 'history':
+        return <ActionHistoryDashboard />
       case 'forecasting':
         return <PredictiveForecastingEngine />
       case 'simulator':
         return <WhatIfSimulator />
       case 'causal':
         return <CausalAnalysisDashboard />
-      case 'agent':
-        return <RecommendationAgentUI />
       case 'budget':
         return <BudgetOptimizerEngine />
       case 'warnings':

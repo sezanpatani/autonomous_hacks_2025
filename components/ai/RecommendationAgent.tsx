@@ -1,29 +1,49 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { Bot, Zap, Clock, DollarSign, TrendingUp, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
-import { useState, useEffect } from 'react'
-import { RecommendationAgent as RecommendationEngine } from '@/lib/aiEngine'
-import { ESG_DATA } from '@/data/mockData'
+import { Bot, Zap, Clock, DollarSign, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Play } from 'lucide-react'
+import { useState } from 'react'
+import { useRecommendations, useActions } from '@/lib/hooks'
+import { useAppStore } from '@/store/appStore'
 
 export default function RecommendationAgentUI() {
-  const [recommendations, setRecommendations] = useState<any[]>([])
-  const [filter, setFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all')
-  const [dismissedIds, setDismissedIds] = useState<string[]>([])
-
-  useEffect(() => {
-    const recs = RecommendationEngine.generateRecommendations(ESG_DATA)
-    setRecommendations(recs)
-  }, [])
+  const { cityName } = useAppStore()
+  const { data: recommendations, loading, refresh } = useRecommendations(cityName, { status: 'pending' })
+  const { executeAction } = useActions(cityName)
+  const [filter, setFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all')
+  const [executing, setExecuting] = useState<string | null>(null)
 
   const filteredRecs = recommendations.filter(rec => 
-    !dismissedIds.includes(rec.id) && 
-    (filter === 'all' || rec.priority.toLowerCase() === filter)
+    filter === 'all' || rec.priority === filter
   )
 
+  const handleExecute = async (recommendationId: string, title: string) => {
+    if (!confirm(`Execute action: ${title}?\n\nThis will update ESG metrics and log the action.`)) return
+    
+    try {
+      setExecuting(recommendationId)
+      await executeAction(recommendationId, `Autonomous AI execution`)
+      alert('✅ Action executed successfully! ESG metrics updated.')
+      refresh()
+    } catch (error: any) {
+      alert(`❌ Failed to execute: ${error.message}`)
+    } finally {
+      setExecuting(null)
+    }
+  }
+
+  if (loading) {
+    return <div className="text-center py-20">Loading recommendations...</div>
+  }
+
+  const priorityCounts = {
+    high: recommendations.filter(r => r.priority === 'high').length,
+    medium: recommendations.filter(r => r.priority === 'medium').length,
+    low: recommendations.filter(r => r.priority === 'low').length,
+  }
+
   const getPriorityColor = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case 'critical': return 'from-red-500 to-rose-600'
+    switch (priority) {
       case 'high': return 'from-orange-500 to-amber-600'
       case 'medium': return 'from-yellow-500 to-orange-400'
       case 'low': return 'from-green-500 to-emerald-600'
@@ -32,24 +52,12 @@ export default function RecommendationAgentUI() {
   }
 
   const getPriorityIcon = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case 'critical': return AlertTriangle
+    switch (priority) {
       case 'high': return Zap
       case 'medium': return TrendingUp
       case 'low': return CheckCircle2
       default: return Bot
     }
-  }
-
-  const handleDismiss = (id: string) => {
-    setDismissedIds([...dismissedIds, id])
-  }
-
-  const priorityCounts = {
-    critical: recommendations.filter(r => r.priority.toLowerCase() === 'critical').length,
-    high: recommendations.filter(r => r.priority.toLowerCase() === 'high').length,
-    medium: recommendations.filter(r => r.priority.toLowerCase() === 'medium').length,
-    low: recommendations.filter(r => r.priority.toLowerCase() === 'low').length,
   }
 
   return (
@@ -72,7 +80,7 @@ export default function RecommendationAgentUI() {
           </motion.div>
           <div>
             <h1 className="text-3xl font-bold">Autonomous Recommendation Agent</h1>
-            <p className="text-white/90">AI-driven action suggestions with priority ranking</p>
+            <p className="text-white/90">AI-driven actions with autonomous execution</p>
           </div>
         </div>
 
@@ -83,23 +91,23 @@ export default function RecommendationAgentUI() {
             <div className="text-3xl font-bold">{recommendations.length}</div>
           </div>
           <div className="bg-red-500/30 rounded-xl p-4 backdrop-blur-sm">
-            <div className="text-white/80 text-sm mb-1">Critical</div>
-            <div className="text-3xl font-bold">{priorityCounts.critical}</div>
-          </div>
-          <div className="bg-orange-500/30 rounded-xl p-4 backdrop-blur-sm">
             <div className="text-white/80 text-sm mb-1">High Priority</div>
             <div className="text-3xl font-bold">{priorityCounts.high}</div>
           </div>
+          <div className="bg-orange-500/30 rounded-xl p-4 backdrop-blur-sm">
+            <div className="text-white/80 text-sm mb-1">Medium</div>
+            <div className="text-3xl font-bold">{priorityCounts.medium}</div>
+          </div>
           <div className="bg-green-500/30 rounded-xl p-4 backdrop-blur-sm">
-            <div className="text-white/80 text-sm mb-1">In Progress</div>
-            <div className="text-3xl font-bold">{dismissedIds.length}</div>
+            <div className="text-white/80 text-sm mb-1">Low Priority</div>
+            <div className="text-3xl font-bold">{priorityCounts.low}</div>
           </div>
         </div>
       </motion.div>
 
       {/* Filter Buttons */}
       <div className="flex flex-wrap gap-3">
-        {['all', 'critical', 'high', 'medium', 'low'].map((f) => (
+        {['all', 'high', 'medium', 'low'].map((f) => (
           <motion.button
             key={f}
             whileHover={{ scale: 1.05 }}
@@ -114,7 +122,6 @@ export default function RecommendationAgentUI() {
             {f}
             {f !== 'all' && (
               <span className="ml-2 px-2 py-1 bg-white/30 rounded-full text-xs">
-                {f === 'critical' && priorityCounts.critical}
                 {f === 'high' && priorityCounts.high}
                 {f === 'medium' && priorityCounts.medium}
                 {f === 'low' && priorityCounts.low}
@@ -131,7 +138,7 @@ export default function RecommendationAgentUI() {
             const Icon = getPriorityIcon(rec.priority)
             return (
               <motion.div
-                key={rec.id}
+                key={rec._id}
                 layout
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -170,7 +177,7 @@ export default function RecommendationAgentUI() {
                           <TrendingUp size={16} className="text-blue-600" />
                           <span className="text-xs text-gray-600">Impact</span>
                         </div>
-                        <div className="text-2xl font-bold text-blue-600">+{rec.impact}</div>
+                        <div className="text-2xl font-bold text-blue-600">+{rec.estimatedImpact}</div>
                       </div>
 
                       <div className="p-3 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200">
@@ -178,11 +185,8 @@ export default function RecommendationAgentUI() {
                           <DollarSign size={16} className="text-green-600" />
                           <span className="text-xs text-gray-600">Cost</span>
                         </div>
-                        <div className="text-xl font-bold text-green-600">
-                          {rec.cost === 'Low' && '₹'}
-                          {rec.cost === 'Medium' && '₹₹'}
-                          {rec.cost === 'High' && '₹₹₹'}
-                          <span className="text-sm ml-1">{rec.cost}</span>
+                        <div className="text-lg font-bold text-green-600">
+                          ₹{(rec.estimatedCost / 10000000).toFixed(1)}Cr
                         </div>
                       </div>
 
@@ -191,15 +195,15 @@ export default function RecommendationAgentUI() {
                           <Clock size={16} className="text-purple-600" />
                           <span className="text-xs text-gray-600">Timeline</span>
                         </div>
-                        <div className="text-xl font-bold text-purple-600">{rec.timeline}</div>
+                        <div className="text-lg font-bold text-purple-600">{rec.estimatedTimeline}</div>
                       </div>
 
                       <div className="p-3 bg-gradient-to-br from-orange-50 to-yellow-50 rounded-lg border border-orange-200">
                         <div className="flex items-center gap-2 mb-1">
                           <Zap size={16} className="text-orange-600" />
-                          <span className="text-xs text-gray-600">Urgency</span>
+                          <span className="text-xs text-gray-600">ROI</span>
                         </div>
-                        <div className="text-xl font-bold text-orange-600">{rec.priority}</div>
+                        <div className="text-xl font-bold text-orange-600">{rec.roi}%</div>
                       </div>
                     </div>
 
@@ -208,8 +212,8 @@ export default function RecommendationAgentUI() {
                       <div className="flex items-start gap-2">
                         <CheckCircle2 className="text-green-600 mt-1 flex-shrink-0" size={20} />
                         <div>
-                          <div className="font-semibold text-green-900 text-sm mb-1">Expected Outcome</div>
-                          <p className="text-sm text-gray-700">{rec.expectedOutcome}</p>
+                          <div className="font-semibold text-green-900 text-sm mb-1">AI Confidence: {(rec.confidence * 100).toFixed(0)}%</div>
+                          <p className="text-sm text-gray-700">{rec.description}</p>
                         </div>
                       </div>
                     </div>
@@ -219,25 +223,31 @@ export default function RecommendationAgentUI() {
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => handleDismiss(rec.id)}
-                        className={`flex-1 py-3 px-6 bg-gradient-to-r ${getPriorityColor(rec.priority)} text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-shadow`}
+                        onClick={() => handleExecute(rec._id, rec.title)}
+                        disabled={executing === rec._id}
+                        className={`flex-1 py-3 px-6 bg-gradient-to-r ${getPriorityColor(rec.priority)} text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center gap-2 disabled:opacity-50`}
                       >
-                        Take Action
+                        {executing === rec._id ? (
+                          <>
+                            <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
+                              <Play size={18} />
+                            </motion.div>
+                            Executing...
+                          </>
+                        ) : (
+                          <>
+                            <Play size={18} />
+                            Execute Action
+                          </>
+                        )}
                       </motion.button>
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
+                        onClick={() => alert(`Module: ${rec.module}\nPriority: ${rec.priority}\nROI: ${rec.roi}%\nConfidence: ${(rec.confidence * 100).toFixed(0)}%`)}
                         className="px-6 py-3 bg-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-300 transition-colors"
                       >
-                        Learn More
-                      </motion.button>
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleDismiss(rec.id)}
-                        className="p-3 bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-colors"
-                      >
-                        <XCircle size={24} />
+                        Details
                       </motion.button>
                     </div>
                   </div>

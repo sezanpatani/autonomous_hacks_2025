@@ -2,7 +2,8 @@
 
 import { motion } from 'framer-motion'
 import { Users, GraduationCap, Heart, Shield, Home, MessageSquare, MapPin } from 'lucide-react'
-import { ESG_DATA } from '@/data/mockData'
+import { useESGMetrics } from '@/lib/hooks'
+import { useAppStore } from '@/store/appStore'
 import { useState } from 'react'
 
 const heatmapData = [
@@ -13,8 +14,25 @@ const heatmapData = [
 ]
 
 export default function SocialModule() {
+  const { cityName } = useAppStore()
+  const { data: metricsData, loading } = useESGMetrics(cityName)
   const [selectedMetric, setSelectedMetric] = useState<'education' | 'healthcare'>('education')
   const [reportText, setReportText] = useState('')
+
+  if (loading) {
+    return <div className="text-center py-20">Loading social metrics...</div>
+  }
+
+  const ESG_DATA = metricsData || {
+    social: {
+      score: 75,
+      education: 80,
+      healthcare: 75,
+      safety: 85,
+      housingAccess: 70,
+      issues: []
+    }
+  }
 
   const submitIssue = () => {
     if (!reportText.trim()) return
@@ -42,16 +60,16 @@ export default function SocialModule() {
             <p className="text-blue-100">Health, Education, Safety & Community</p>
           </div>
         </div>
-        <div className="text-5xl font-bold">{ESG_DATA.social.score}</div>
+        <div className="text-5xl font-bold">{ESG_DATA.social?.score || 75}</div>
       </motion.div>
 
       {/* Key Metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { icon: GraduationCap, label: 'Education', value: ESG_DATA.social.education, color: 'blue' },
-          { icon: Heart, label: 'Healthcare', value: ESG_DATA.social.healthcare, color: 'red' },
-          { icon: Shield, label: 'Safety', value: ESG_DATA.social.safety, color: 'green' },
-          { icon: Home, label: 'Housing', value: ESG_DATA.social.housingAccess, color: 'purple' },
+          { icon: GraduationCap, label: 'Education', value: ESG_DATA.social?.education || 80, color: 'blue' },
+          { icon: Heart, label: 'Healthcare', value: ESG_DATA.social?.healthcare || 75, color: 'red' },
+          { icon: Shield, label: 'Safety', value: ESG_DATA.social?.safety || 85, color: 'green' },
+          { icon: Home, label: 'Housing', value: ESG_DATA.social?.housingAccess || 70, color: 'purple' },
         ].map((metric, index) => (
           <motion.div
             key={metric.label}
@@ -180,7 +198,7 @@ export default function SocialModule() {
         </h2>
         
         <div className="space-y-3">
-          {ESG_DATA.social.issues.map((issue, index) => (
+          {(ESG_DATA?.social?.issues || []).map((issue: any, index: number) => (
             <motion.div
               key={issue.type}
               initial={{ x: -50, opacity: 0 }}

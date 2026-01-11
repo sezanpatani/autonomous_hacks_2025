@@ -2,11 +2,30 @@
 
 import { motion } from 'framer-motion'
 import { Trophy, Award, Flame, TrendingUp } from 'lucide-react'
-import { GAMIFICATION_DATA } from '@/data/mockData'
 import { useState } from 'react'
 
 export default function GamificationPanel() {
   const [showLeaderboard, setShowLeaderboard] = useState(false)
+
+  // Static gamification data (can be moved to API later)
+  const GAMIFICATION_DATA = {
+    currentLevel: 'Silver City',
+    points: 7250,
+    streak: 12,
+    badges: [
+      { id: 1, name: 'Green Pioneer', icon: '🌱', earned: true },
+      { id: 2, name: 'Water Savior', icon: '💧', earned: true },
+      { id: 3, name: 'Clean Air Champion', icon: '🌬️', earned: false },
+      { id: 4, name: 'Waste Warrior', icon: '♻️', earned: true },
+    ],
+    leaderboard: [
+      { ward: 'Ward-A', score: 85, rank: 1 },
+      { ward: 'Ward-B', score: 78, rank: 2 },
+      { ward: 'Ward-C', score: 72, rank: 3 },
+      { ward: 'Ward-D', score: 69, rank: 4 },
+      { ward: 'Ward-E', score: 65, rank: 5 },
+    ]
+  }
 
   return (
     <motion.div

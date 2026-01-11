@@ -1,3 +1,63 @@
+// Real-Time Data Streaming Simulation
+export class RealtimeEngine {
+  // Simulate WebSocket-like data stream with realistic fluctuations
+  static simulateDataStream(interval: number = 4000, callback: (data: any) => void) {
+    const generateUpdate = () => {
+      const timestamp = new Date().toISOString()
+      const updateType = Math.random()
+      
+      let update: any = { timestamp, type: 'metrics' }
+      
+      if (updateType < 0.5) {
+        // Metric update
+        update = {
+          ...update,
+          type: 'metric_update',
+          metric: ['aqi', 'water', 'energy', 'waste'][Math.floor(Math.random() * 4)],
+          value: Math.floor(Math.random() * 100),
+          change: parseFloat((Math.random() * 4 - 2).toFixed(1)),
+          zone: Math.random() > 0.5 ? `Zone-${Math.floor(Math.random() * 4) + 1}` : 'overall'
+        }
+      } else if (updateType < 0.8) {
+        // Alert/Event
+        update = {
+          ...update,
+          type: 'alert',
+          severity: ['info', 'warning', 'critical'][Math.floor(Math.random() * 3)],
+          message: 'Real-time sensor update detected',
+          zone: `Zone-${Math.floor(Math.random() * 4) + 1}`
+        }
+      } else {
+        // Prediction update
+        update = {
+          ...update,
+          type: 'prediction',
+          forecast: Math.floor(Math.random() * 100),
+          confidence: 0.75 + Math.random() * 0.2
+        }
+      }
+      
+      callback(update)
+    }
+    
+    const intervalId = setInterval(generateUpdate, interval)
+    return () => clearInterval(intervalId) // Cleanup function
+  }
+  
+  // Generate live sensor readings with realistic noise
+  static generateLiveSensorData(baseValue: number, variance: number = 5) {
+    const noise = (Math.random() - 0.5) * variance
+    const trend = Math.sin(Date.now() / 10000) * (variance / 2)
+    return Math.max(0, baseValue + noise + trend)
+  }
+  
+  // Simulate anomaly detection
+  static detectAnomaly(currentValue: number, historicalAvg: number, threshold: number = 20): boolean {
+    const deviation = Math.abs(currentValue - historicalAvg)
+    return deviation > threshold
+  }
+}
+
 // AI/ML Prediction Engine - Simulates LSTM-style forecasting
 export class PredictiveEngine {
   // Forecast ESG scores using temporal modeling

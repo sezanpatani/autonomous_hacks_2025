@@ -4,16 +4,24 @@ import { motion } from 'framer-motion'
 import { Brain, GitBranch, AlertCircle, TrendingDown, Factory, Car, Building2, Zap } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { CausalAI } from '@/lib/aiEngine'
-import { ESG_DATA } from '@/data/mockData'
+import { useESGMetrics } from '@/lib/hooks'
+import { useAppStore } from '@/store/appStore'
 
 export default function CausalAnalysisDashboard() {
+  const { cityName } = useAppStore()
+  const { data: metricsData, loading } = useESGMetrics(cityName)
   const [selectedZone, setSelectedZone] = useState('Zone-1')
   const [causalData, setCausalData] = useState<any>(null)
 
   useEffect(() => {
-    const data = CausalAI.analyzePollutionCauses(selectedZone, ESG_DATA.environment.aqi)
+    if (!metricsData) return
+    const data = CausalAI.analyzePollutionCauses(selectedZone, metricsData.environment?.aqi || 156)
     setCausalData(data)
-  }, [selectedZone])
+  }, [selectedZone, metricsData])
+
+  if (loading) {
+    return <div className="text-center py-20">Loading causal analysis...</div>
+  }
 
   const zones = ['Zone-1', 'Zone-2', 'Zone-3', 'Zone-4']
 

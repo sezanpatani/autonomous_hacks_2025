@@ -2,15 +2,35 @@
 
 import { motion } from 'framer-motion'
 import { AlertCircle, Lightbulb, CheckCircle2, ArrowRight } from 'lucide-react'
-import { AI_INSIGHTS } from '@/data/mockData'
-
-const priorityConfig = {
-  high: { icon: AlertCircle, color: 'text-red-600', bgColor: 'bg-red-50', borderColor: 'border-red-200' },
-  medium: { icon: Lightbulb, color: 'text-yellow-600', bgColor: 'bg-yellow-50', borderColor: 'border-yellow-200' },
-  low: { icon: CheckCircle2, color: 'text-green-600', bgColor: 'bg-green-50', borderColor: 'border-green-200' },
-}
+import { useAlerts } from '@/lib/hooks'
+import { useAppStore } from '@/store/appStore'
 
 export default function AIInsights() {
+  const { cityName } = useAppStore()
+  const { data: alerts, loading } = useAlerts(cityName)
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-2xl shadow-xl p-6 animate-pulse">
+        <div className="h-48 bg-gray-200 rounded"></div>
+      </div>
+    )
+  }
+
+  const AI_INSIGHTS = alerts.map(alert => ({
+    id: alert._id,
+    type: alert.type,
+    module: alert.module,
+    message: alert.message,
+    priority: alert.severity,
+    action: 'View Details'
+  }))
+
+  const priorityConfig = {
+    high: { icon: AlertCircle, color: 'text-red-600', bgColor: 'bg-red-50', borderColor: 'border-red-200' },
+    medium: { icon: Lightbulb, color: 'text-yellow-600', bgColor: 'bg-yellow-50', borderColor: 'border-yellow-200' },
+    low: { icon: CheckCircle2, color: 'text-green-600', bgColor: 'bg-green-50', borderColor: 'border-green-200' },
+  }
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}

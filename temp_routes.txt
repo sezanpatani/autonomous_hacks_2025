@@ -1,0 +1,663 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getDatabase } from '@/lib/mongodbClient'
+import { getInMemoryData, insertInMemoryData, updateInMemoryData } from '@/lib/inMemoryDB'
+import { ObjectId } from 'mongodb'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+export async function POST(request: NextRequest) {
+  try {
+    const { recommendationId, executedBy, notes } = await request.json()
+
+    if (!recommendationId) {
+      return NextResponse.json({ error: 'Recommendation ID required' }, { status: 400 })
+    }
+
+    const db = await getDatabase()
+    
+    if (db) {
+      // Use MongoDB
+      const recommendation = await db.collection('recommendations').findOne({
+        _id: new ObjectId(recommendationId)
+      })
+
+      if (!recommendation) {
+        return NextResponse.json({ error: 'Recommendation not found' }, { status: 404 })
+      }
+
+      await db.collection('recommendations').updateOne(
+        { _id: new ObjectId(recommendationId) },
+        { 
+          $set: { 
+            status: 'executed',
+            executedAt: new Date(),
+            executedBy: executedBy || 'AI Agent'
+          } 
+        }
+      )
+
+      const action = {
+        recommendationId,
+        cityName: recommendation.cityName,
+        title: recommendation.title,
+        module: recommendation.module,
+        executedAt: new Date(),
+        executedBy: executedBy || 'AI Agent',
+        notes: notes || `Autonomous execution of ${recommendation.title}`,
+        estimatedImpact: recommendation.estimatedImpact,
+        cost: recommendation.estimatedCost
+      }
+
+      await db.collection('actions').insertOne(action)
+
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Action executed successfully',
+        action 
+      })
+    } else {
+      // Use in-memory data
+      const recommendations = getInMemoryData('recommendations')
+      const recommendation = recommendations.find((r: any) => r._id === recommendationId)
+      
+      if (!recommendation) {
+        return NextResponse.json({ error: 'Recommendation not found' }, { status: 404 })
+      }
+
+      updateInMemoryData('recommendations', { _id: recommendationId }, {
+        $set: { status: 'executed', executedAt: new Date(), executedBy: executedBy || 'AI Agent' }
+      })
+
+      const action = {
+        recommendationId,
+        cityName: recommendation.cityName,
+        title: recommendation.title,
+        module: recommendation.module,
+        executedAt: new Date(),
+        executedBy: executedBy || 'AI Agent',
+        notes: notes || `Autonomous execution of ${recommendation.title}`,
+        estimatedImpact: recommendation.estimatedImpact,
+        cost: recommendation.estimatedCost
+      }
+
+      insertInMemoryData('actions', action)
+
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Action executed successfully (in-memory)',
+        action 
+      })
+    }
+  } catch (error) {
+    console.error('Error executing action:', error)
+    return NextResponse.json({ error: 'Failed to execute action' }, { status: 500 })
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const cityName = request.nextUrl.searchParams.get('city') || 'Mumbai'
+    
+    const db = await getDatabase()
+    let actions
+    
+    if (db) {
+      actions = await db.collection('actions')
+        .find({ cityName })
+        .sort({ executedAt: -1 })
+        .limit(20)
+        .toArray()
+    } else {
+      actions = getInMemoryData('actions', { cityName })
+        .sort((a: any, b: any) => b.executedAt - a.executedAt)
+        .slice(0, 20)
+    }
+
+    return NextResponse.json({ actions })
+  } catch (error) {
+    console.error('Error fetching actions:', error)
+    return NextResponse.json({ actions: [] })
+  }
+}
+
+import { NextRequest, NextResponse } from 'next/server'
+import { getOrchestrator } from '@/lib/multiAgentSystem'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { action, taskData, workflowType, taskIds } = body
+    
+    const orchestrator = getOrchestrator()
+
+    if (action === 'create_task') {
+      // Create a single task
+      const task = orchestrator.createTask(taskData)
+      return NextResponse.json({ success: true, task })
+    }
+
+    if (action === 'execute_task') {
+      // Execute a single task
+      const { taskId } = body
+      const result = await orchestrator.executeTask(taskId)
+      return NextResponse.json({ success: true, result })
+    }
+
+    if (action === 'execute_parallel') {
+      // Execute multiple tasks in parallel
+      const results = await orchestrator.executeParallelTasks(taskIds)
+      return NextResponse.json({ success: true, results })
+    }
+
+    if (action === 'orchestrate_workflow') {
+      // Execute a predefined workflow
+      const result = await orchestrator.orchestrateWorkflow(workflowType)
+      return NextResponse.json({ success: true, workflow: result })
+    }
+
+    if (action === 'send_message') {
+      // Send inter-agent message
+      const { from, to, content, type } = body
+      const message = orchestrator.sendMessage({ from, to, content, type })
+      return NextResponse.json({ success: true, message })
+    }
+
+    return NextResponse.json(
+      { success: false, error: 'Invalid action' },
+      { status: 400 }
+    )
+  } catch (error: any) {
+    console.error('Agent API error:', error)
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    )
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const searchParams = request.nextUrl.searchParams
+    const type = searchParams.get('type') || 'all'
+    
+    const orchestrator = getOrchestrator()
+
+    if (type === 'agents') {
+      const agents = orchestrator.getAgentStates()
+      return NextResponse.json({ agents })
+    }
+
+    if (type === 'tasks') {
+      const tasks = orchestrator.getTasks()
+      return NextResponse.json({ tasks })
+    }
+
+    if (type === 'messages') {
+      const limit = parseInt(searchParams.get('limit') || '50')
+      const messages = orchestrator.getMessages(limit)
+      return NextResponse.json({ messages })
+    }
+
+    if (type === 'all') {
+      const agents = orchestrator.getAgentStates()
+      const tasks = orchestrator.getTasks()
+      const messages = orchestrator.getMessages(50)
+      
+      return NextResponse.json({
+        agents,
+        tasks,
+        messages,
+        summary: {
+          totalAgents: agents.length,
+          busyAgents: agents.filter(a => a.status === 'busy').length,
+          totalTasks: tasks.length,
+          completedTasks: tasks.filter(t => t.status === 'completed').length,
+          pendingTasks: tasks.filter(t => t.status === 'pending').length,
+          messageCount: messages.length
+        }
+      })
+    }
+
+    return NextResponse.json(
+      { error: 'Invalid type parameter' },
+      { status: 400 }
+    )
+  } catch (error: any) {
+    console.error('Agent GET error:', error)
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    )
+  }
+}
+
+import { NextRequest, NextResponse } from 'next/server'
+import { getDatabase } from '@/lib/mongodbClient'
+
+export async function GET(request: NextRequest) {
+  try {
+    const db = await getDatabase()
+    const cityName = request.nextUrl.searchParams.get('city') || 'Mumbai'
+    
+    if (!db) {
+      return NextResponse.json({ alerts: [] })
+    }
+    
+    const alerts = await db.collection('esgalerts')
+      .find({ cityName, active: true })
+      .sort({ severity: -1, timestamp: -1 })
+      .toArray()
+
+    return NextResponse.json({ alerts })
+  } catch (error) {
+    console.error('Error fetching alerts:', error)
+    return NextResponse.json({ alerts: [] })
+  }
+}
+
+import { NextRequest } from 'next/server'
+import { OpenAIStream, StreamingTextResponse } from 'ai'
+import OpenAI from 'openai'
+import { getDatabase } from '@/lib/mongodbClient'
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || ''
+})
+
+export async function POST(req: NextRequest) {
+  try {
+    const { messages, cityName = 'Mumbai' } = await req.json()
+
+    // Get real-time city data for context
+    const db = await getDatabase()
+    
+    let metrics, recommendations, alerts
+    
+    if (db) {
+      metrics = await db.collection('esgmetrics').findOne({ cityName })
+      recommendations = await db.collection('recommendations')
+        .find({ cityName, status: 'pending' })
+        .limit(5)
+        .toArray()
+      alerts = await db.collection('esgalerts')
+        .find({ cityName, active: true })
+        .limit(3)
+        .toArray()
+    } else {
+      // Use fallback defaults if DB unavailable
+      metrics = null
+      recommendations = []
+      alerts = []
+    }
+
+    // Build context for AI
+    const contextData = {
+      cityName,
+      esgScore: metrics?.overall || 72,
+      environment: {
+        aqi: metrics?.environment?.aqi || 156,
+        waterQuality: metrics?.environment?.waterQuality || 75,
+        wasteRecycling: metrics?.environment?.wasteRecycling || 45
+      },
+      social: {
+        healthcare: metrics?.social?.healthcare || 71,
+        education: metrics?.social?.education || 82,
+        safety: metrics?.social?.safety || 79
+      },
+      governance: {
+        transparency: metrics?.governance?.transparency || 78,
+        compliance: metrics?.governance?.compliance || 82
+      },
+      topRecommendations: recommendations.map(r => ({
+        title: r.title,
+        priority: r.priority,
+        impact: r.estimatedImpact
+      })),
+      activeAlerts: alerts.map(a => ({
+        message: a.message,
+        severity: a.severity
+      }))
+    }
+
+    const systemPrompt = `You are an AI sustainability assistant for ${cityName}'s ESG platform. 
+
+Current City Context:
+- ESG Score: ${contextData.esgScore}/100
+- AQI Level: ${contextData.environment.aqi} (Target: <100)
+- Water Quality: ${contextData.environment.waterQuality}%
+- Waste Recycling: ${contextData.environment.wasteRecycling}%
+- Healthcare Access: ${contextData.social.healthcare}%
+- Education Score: ${contextData.social.education}%
+- Safety Index: ${contextData.social.safety}%
+
+Active Alerts:
+${contextData.activeAlerts.map(a => `- [${a.severity}] ${a.message}`).join('\n')}
+
+Top Recommendations:
+${contextData.topRecommendations.map(r => `- [${r.priority}] ${r.title} (Impact: +${r.impact})`).join('\n')}
+
+Your role:
+1. Provide data-driven insights based on real city metrics
+2. Explain ESG concepts in simple language for non-technical users
+3. Suggest actionable interventions with clear ROI
+4. Answer questions about pollution, water, energy, social issues
+5. Be conversational, helpful, and focused on sustainability
+
+Keep responses concise (2-3 sentences) unless asked for detailed analysis.`
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4-turbo-preview',
+      stream: true,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...messages
+      ],
+      temperature: 0.7,
+      max_tokens: 500
+    })
+
+    const stream = OpenAIStream(response)
+    return new StreamingTextResponse(stream)
+
+  } catch (error: any) {
+    console.error('OpenAI API Error:', error)
+    
+    // Fallback to intelligent mock responses if OpenAI fails
+    if (error.message?.includes('API key')) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'OpenAI API key not configured. Add OPENAI_API_KEY to .env.local',
+          fallback: true,
+          message: "I can see your city's ESG score is 72/100. The main issues are high AQI (156) in Zone-1 and low waste recycling (45%). I recommend deploying electric buses and improving waste segregation campaigns."
+        }), 
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    return new Response(JSON.stringify({ error: error.message }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+}
+
+import { NextResponse } from 'next/server'
+
+// In-memory storage (replace with database in production)
+let complaints: any[] = []
+let nextId = 1
+
+// GET /api/complaints
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const status = searchParams.get('status')
+    const category = searchParams.get('category')
+    
+    let filtered = complaints
+    
+    if (status) {
+      filtered = filtered.filter(c => c.status === status)
+    }
+    
+    if (category) {
+      filtered = filtered.filter(c => c.category === category)
+    }
+    
+    return NextResponse.json({
+      complaints: filtered,
+      total: filtered.length
+    })
+  } catch (error) {
+    console.error('Error fetching complaints:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch complaints' },
+      { status: 500 }
+    )
+  }
+}
+
+// POST /api/complaints
+export async function POST(request: Request) {
+  try {
+    const formData = await request.formData()
+    
+    const complaint = {
+      id: nextId++,
+      category: formData.get('category'),
+      description: formData.get('description'),
+      location: formData.get('location'),
+      priority: formData.get('priority') || 'Medium',
+      status: 'Pending',
+      createdAt: new Date().toISOString(),
+      image: formData.get('image') ? 'uploaded' : null
+    }
+    
+    complaints.push(complaint)
+    
+    // In production, save to database
+    // await db.complaints.create({ data: complaint })
+    
+    console.log('New complaint created:', complaint)
+    
+    return NextResponse.json({
+      success: true,
+      complaint
+    }, { status: 201 })
+  } catch (error) {
+    console.error('Error creating complaint:', error)
+    return NextResponse.json(
+      { error: 'Failed to create complaint' },
+      { status: 500 }
+    )
+  }
+}
+
+import { NextRequest, NextResponse } from 'next/server'
+import { getDatabase } from '@/lib/mongodbClient'
+import { getInMemoryData } from '@/lib/inMemoryDB'
+
+export async function GET(request: NextRequest) {
+  try {
+    const cityName = request.nextUrl.searchParams.get('city') || 'Mumbai'
+    
+    const db = await getDatabase()
+    let metrics
+    
+    if (db) {
+      metrics = await db.collection('esgmetrics').findOne({ cityName })
+    } else {
+      // Fallback to in-memory data
+      metrics = getInMemoryData('esgmetrics', { cityName })[0]
+    }
+    
+    if (!metrics) {
+      return NextResponse.json({ error: 'City not found' }, { status: 404 })
+    }
+
+    return NextResponse.json(metrics)
+  } catch (error) {
+    console.error('Error fetching ESG metrics:', error)
+    // Return fallback data
+    const metrics = getInMemoryData('esgmetrics')[0]
+    return NextResponse.json(metrics || { error: 'No data available' })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const db = await getDatabase()
+    const data = await request.json()
+    
+    if (!db) {
+      return NextResponse.json({ error: 'Database connection failed' }, { status: 503 })
+    }
+    
+    const result = await db.collection('esgmetrics').updateOne(
+      { cityName: data.cityName },
+      { $set: { ...data, timestamp: new Date() } },
+      { upsert: true }
+    )
+
+    return NextResponse.json({ success: true, result })
+  } catch (error) {
+    console.error('Error updating ESG metrics:', error)
+    return NextResponse.json({ error: 'Failed to update metrics' }, { status: 500 })
+  }
+}
+
+import { NextResponse } from 'next/server'
+
+// GET /api/health
+export async function GET() {
+  return NextResponse.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0',
+    services: {
+      database: 'connected',
+      ai: 'active',
+      api: 'operational'
+    }
+  })
+}
+
+import { NextRequest, NextResponse } from 'next/server'
+import { getDatabase } from '@/lib/mongodbClient'
+
+export async function GET(request: NextRequest) {
+  try {
+    const db = await getDatabase()
+    const cityName = request.nextUrl.searchParams.get('city') || 'Mumbai'
+    const type = request.nextUrl.searchParams.get('type')
+    
+    if (!db) {
+      return NextResponse.json({ predictions: [] })
+    }
+    
+    const filter: any = { cityName }
+    if (type) filter.type = type
+
+    const predictions = await db.collection('predictions')
+      .find(filter)
+      .sort({ timestamp: -1 })
+      .toArray()
+
+    return NextResponse.json({ predictions })
+  } catch (error) {
+    console.error('Error fetching predictions:', error)
+    return NextResponse.json({ predictions: [] })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const db = await getDatabase()
+    const data = await request.json()
+    
+    if (!db) {
+      return NextResponse.json({ error: 'Database connection failed' }, { status: 503 })
+    }
+    
+    const prediction = {
+      ...data,
+      timestamp: new Date()
+    }
+
+    const result = await db.collection('predictions').insertOne(prediction)
+
+    return NextResponse.json({ success: true, id: result.insertedId })
+  } catch (error) {
+    console.error('Error creating prediction:', error)
+    return NextResponse.json({ error: 'Failed to create prediction' }, { status: 500 })
+  }
+}
+
+import { NextRequest, NextResponse } from 'next/server'
+import { getDatabase } from '@/lib/mongodbClient'
+import { getInMemoryData } from '@/lib/inMemoryDB'
+
+export async function GET(request: NextRequest) {
+  try {
+    const cityName = request.nextUrl.searchParams.get('city') || 'Mumbai'
+    const status = request.nextUrl.searchParams.get('status')
+    const module = request.nextUrl.searchParams.get('module')
+    
+    const filter: any = { cityName }
+    if (status) filter.status = status
+    if (module) filter.module = module
+
+    const db = await getDatabase()
+    let recommendations
+    
+    if (db) {
+      recommendations = await db.collection('recommendations')
+        .find(filter)
+        .sort({ priority: -1, confidence: -1 })
+        .toArray()
+    } else {
+      // Fallback to in-memory data
+      recommendations = getInMemoryData('recommendations', filter)
+        .sort((a: any, b: any) => {
+          const priority = { high: 3, medium: 2, low: 1 }
+          return (priority[b.priority as keyof typeof priority] || 0) - 
+                 (priority[a.priority as keyof typeof priority] || 0)
+        })
+    }
+
+    return NextResponse.json({ recommendations })
+  } catch (error) {
+    console.error('Error fetching recommendations:', error)
+    const recommendations = getInMemoryData('recommendations')
+    return NextResponse.json({ recommendations })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const db = await getDatabase()
+    const data = await request.json()
+    
+    if (!db) {
+      return NextResponse.json({ error: 'Database connection failed' }, { status: 503 })
+    }
+    
+    const recommendation = {
+      ...data,
+      timestamp: new Date(),
+      status: data.status || 'pending'
+    }
+
+    const result = await db.collection('recommendations').insertOne(recommendation)
+
+    return NextResponse.json({ success: true, id: result.insertedId })
+  } catch (error) {
+    console.error('Error creating recommendation:', error)
+    return NextResponse.json({ error: 'Failed to create recommendation' }, { status: 500 })
+  }
+}
+
+import { NextRequest, NextResponse } from 'next/server'
+import { seedDatabase } from '@/lib/seedDatabase'
+
+export async function POST(request: NextRequest) {
+  try {
+    const result = await seedDatabase()
+    return NextResponse.json(result)
+  } catch (error: any) {
+    console.error('Error seeding database:', error)
+    return NextResponse.json({ 
+      error: error.message,
+      fallback: 'Using in-memory data instead'
+    }, { status: 200 }) // Return 200 with fallback message
+  }
+}
+
+export async function GET(request: NextRequest) {
+  return POST(request)
+}
+
