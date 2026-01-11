@@ -1,43 +1,111 @@
 'use client'
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Send, Mic, Volume2 } from 'lucide-react'
-import { useState } from 'react'
+import { X, Send, Sparkles } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
 import { useAppStore } from '@/store/appStore'
 
-const AI_RESPONSES = [
-  "I've analyzed Zone-1's pollution data. The AQI spike is due to increased vehicle traffic during peak hours. I recommend implementing a congestion charge or promoting public transport.",
-  "Your city's water usage increased by 8% this month. The main issue is in Zone-3 where old pipelines are causing leakage. Fixing these could save 2 million liters per day.",
-  "Great news! Your waste recycling rate improved by 5% this quarter. To reach 60%, focus on educational campaigns in residential areas.",
-  "Healthcare access in Zone-5 is below target. I've identified 3 optimal locations for new health centers based on population density and travel distance.",
-]
-
 export default function AIAssistant() {
-  const { toggleAIAssistant } = useAppStore()
-  const [messages, setMessages] = useState([
-    { role: 'ai', text: "👋 Hi! I'm your AI sustainability assistant. Ask me anything about your city's ESG performance!" },
+  const { toggleAIAssistant, cityName } = useAppStore()
+  const [messages, setMessages] = useState<Array<{ role: string; content: string; id: string }>>([
+    { 
+      id: 'welcome', 
+      role: 'assistant', 
+      content: `👋 Hi! I'm your AI sustainability assistant powered by GPT-4. I have real-time access to ${cityName}'s ESG data. Ask me anything!` 
+    }
   ])
   const [input, setInput] = useState('')
-  const [isTyping, setIsTyping] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const sendMessage = () => {
-    if (!input.trim()) return
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
 
-    // Add user message
-    const userMessage = { role: 'user', text: input }
-    setMessages([...messages, userMessage])
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!input.trim() || isLoading) return
+
+    const userMessage = { id: Date.now().toString(), role: 'user', content: input }
+    setMessages(prev => [...prev, userMessage])
     setInput('')
-    setIsTyping(true)
+    setIsLoading(true)
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse = {
-        role: 'ai',
-        text: AI_RESPONSES[Math.floor(Math.random() * AI_RESPONSES.length)],
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          messages: [...messages, userMessage].map(m => ({ role: m.role, content: m.content })),
+          cityName 
+        })
+      })
+
+      if (!response.ok) throw new Error('API request failed')
+      
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      let aiResponse = ''
+
+      if (reader) {
+        const assistantId = 'streaming'
+        setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '' }])
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          
+          const chunk = decoder.decode(value)
+          aiResponse += chunk
+          
+          setMessages(prev => {
+            const newMessages = [...prev]
+            const lastMsg = newMessages[newMessages.length - 1]
+            if (lastMsg?.id === assistantId) {
+              lastMsg.content = aiResponse
+            }
+            return newMessages
+          })
+        }
+
+        setMessages(prev => {
+          const newMessages = [...prev]
+          const lastMsg = newMessages[newMessages.length - 1]
+          if (lastMsg?.id === assistantId) {
+            lastMsg.id = Date.now().toString()
+          }
+          return newMessages
+        })
       }
-      setMessages((prev) => [...prev, aiResponse])
-      setIsTyping(false)
-    }, 1500)
+    } catch (error) {
+      console.error('Chat error:', error)
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: '❌ Sorry, I encountered an error. Please try again.'
+      }])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const quickQuestions = [
+    "What's the current AQI status?",
+    "How can we improve water quality?",
+    "Show social metrics insights",
+    "Suggest governance improvements"
+  ]
+
+  const handleQuickQuestion = (question: string) => {
+    setInput(question)
+    setTimeout(() => {
+      const form = document.querySelector('#chat-form') as HTMLFormElement
+      form?.requestSubmit()
+    }, 100)
   }
 
   return (
@@ -48,119 +116,98 @@ export default function AIAssistant() {
       className="fixed bottom-24 lg:bottom-8 right-6 w-96 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-2xl z-50 overflow-hidden"
     >
       {/* Header */}
-      <div className="gradient-esg p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <motion.div
-            animate={{ rotate: [0, 360] }}
-            transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-            className="w-10 h-10 bg-white rounded-full flex items-center justify-center"
-          >
-            <span className="text-2xl">🤖</span>
-          </motion.div>
+      <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+            <Sparkles className="text-white" size={16} />
+          </div>
           <div>
-            <h3 className="text-white font-bold">AI Assistant</h3>
-            <div className="flex items-center gap-1">
-              <motion.div
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-                className="w-2 h-2 bg-green-300 rounded-full"
-              />
-              <span className="text-xs text-white/80">Online</span>
-            </div>
+            <h3 className="text-white font-semibold">AI Assistant</h3>
+            <p className="text-white/80 text-xs">GPT-4 Powered</p>
           </div>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.1, rotate: 90 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={toggleAIAssistant}
-          className="text-white"
-        >
-          <X size={24} />
-        </motion.button>
+        <button onClick={toggleAIAssistant} className="text-white hover:bg-white/20 p-2 rounded-lg">
+          <X size={20} />
+        </button>
       </div>
 
-      {/* Chat Messages */}
-      <div className="h-96 overflow-y-auto p-4 space-y-3 bg-gray-50">
+      {/* Messages */}
+      <div className="h-96 overflow-y-auto p-4 space-y-3">
         <AnimatePresence>
-          {messages.map((message, index) => (
+          {messages.map((message: any) => (
             <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 20 }}
+              key={message.id}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[80%] rounded-2xl p-3 ${
+                className={`max-w-[80%] p-3 rounded-2xl ${
                   message.role === 'user'
-                    ? 'bg-gradient-to-r from-green-500 to-blue-500 text-white'
-                    : 'bg-white shadow-md'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-800'
                 }`}
               >
-                <p className="text-sm">{message.text}</p>
+                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
               </div>
             </motion.div>
           ))}
         </AnimatePresence>
-
-        {isTyping && (
+        {isLoading && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="flex justify-start"
           >
-            <div className="bg-white rounded-2xl p-3 shadow-md">
-              <motion.div
-                animate={{ opacity: [0.4, 1, 0.4] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-                className="flex gap-1"
-              >
-                <div className="w-2 h-2 bg-gray-400 rounded-full" />
-                <div className="w-2 h-2 bg-gray-400 rounded-full" />
-                <div className="w-2 h-2 bg-gray-400 rounded-full" />
-              </motion.div>
+            <div className="bg-gray-100 p-3 rounded-2xl">
+              <div className="flex gap-1">
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100" />
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200" />
+              </div>
             </div>
           </motion.div>
         )}
+        <div ref={messagesEndRef} />
       </div>
+
+      {/* Quick Questions */}
+      {messages.length <= 1 && (
+        <div className="px-4 pb-3">
+          <p className="text-xs text-gray-500 mb-2">Quick questions:</p>
+          <div className="grid grid-cols-2 gap-2">
+            {quickQuestions.map((q) => (
+              <button
+                key={q}
+                onClick={() => handleQuickQuestion(q)}
+                className="text-xs p-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-left transition-colors"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Input */}
-      <div className="p-4 bg-white border-t">
-        <div className="flex items-center gap-2">
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            className="p-2 rounded-full bg-gray-100 hover:bg-gray-200"
-          >
-            <Mic size={20} className="text-gray-600" />
-          </motion.button>
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-            placeholder="Ask about ESG insights..."
-            className="flex-1 px-4 py-2 rounded-full bg-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
-          />
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={sendMessage}
-            className="p-2 rounded-full gradient-esg"
-          >
-            <Send size={20} className="text-white" />
-          </motion.button>
-        </div>
-
-        {/* Voice Support Indicator */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex items-center justify-center gap-2 mt-2 text-xs text-gray-500"
+      <form id="chat-form" onSubmit={handleSubmit} className="p-4 border-t flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Ask about ESG metrics..."
+          className="flex-1 px-4 py-2 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          disabled={isLoading}
+        />
+        <button
+          type="submit"
+          disabled={isLoading || !input.trim()}
+          className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Volume2 size={12} />
-          <span>Voice & text support available</span>
-        </motion.div>
-      </div>
+          <Send size={20} />
+        </button>
+      </form>
     </motion.div>
   )
 }

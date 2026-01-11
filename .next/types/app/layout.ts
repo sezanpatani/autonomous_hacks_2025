@@ -1,4 +1,4 @@
-// File: D:\c-user-patani sezan\Desktop\autonomous\app2\app\layout.tsx
+// File: D:\autonomous_hacks_2025\app\layout.tsx
 import * as entry from '../../../app/layout.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

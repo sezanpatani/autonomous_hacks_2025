@@ -10,11 +10,46 @@ export default function RecommendationAgentUI() {
   const [recommendations, setRecommendations] = useState<any[]>([])
   const [filter, setFilter] = useState<'all' | 'critical' | 'high' | 'medium' | 'low'>('all')
   const [dismissedIds, setDismissedIds] = useState<string[]>([])
+  const [executingId, setExecutingId] = useState<string | null>(null)
+  const [showConfirm, setShowConfirm] = useState<string | null>(null)
+  const [executedActions, setExecutedActions] = useState<any[]>([])
 
   useEffect(() => {
     const recs = RecommendationEngine.generateRecommendations(ESG_DATA)
     setRecommendations(recs)
   }, [])
+
+  const handleExecute = async (rec: any) => {
+    setShowConfirm(null)
+    setExecutingId(rec.id)
+
+    try {
+      // Simulate API call to execute action
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      const executedAction = {
+        id: rec.id,
+        action: rec.action,
+        timestamp: new Date(),
+        impact: rec.impact,
+        status: 'completed'
+      }
+      
+      setExecutedActions(prev => [executedAction, ...prev])
+      setDismissedIds(prev => [...prev, rec.id])
+      
+      // Show success notification
+      console.log('Action executed:', executedAction)
+    } catch (error) {
+      console.error('Execution failed:', error)
+    } finally {
+      setExecutingId(null)
+    }
+  }
+
+  const handleDismiss = (id: string) => {
+    setDismissedIds([...dismissedIds, id])
+  }
 
   const filteredRecs = recommendations.filter(rec => 
     !dismissedIds.includes(rec.id) && 
@@ -41,15 +76,11 @@ export default function RecommendationAgentUI() {
     }
   }
 
-  const handleDismiss = (id: string) => {
-    setDismissedIds([...dismissedIds, id])
-  }
-
   const priorityCounts = {
-    critical: recommendations.filter(r => r.priority.toLowerCase() === 'critical').length,
-    high: recommendations.filter(r => r.priority.toLowerCase() === 'high').length,
-    medium: recommendations.filter(r => r.priority.toLowerCase() === 'medium').length,
-    low: recommendations.filter(r => r.priority.toLowerCase() === 'low').length,
+    critical: recommendations.filter((r: any) => r.priority.toLowerCase() === 'critical').length,
+    high: recommendations.filter((r: any) => r.priority.toLowerCase() === 'high').length,
+    medium: recommendations.filter((r: any) => r.priority.toLowerCase() === 'medium').length,
+    low: recommendations.filter((r: any) => r.priority.toLowerCase() === 'low').length,
   }
 
   return (
@@ -219,17 +250,21 @@ export default function RecommendationAgentUI() {
                       <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => handleDismiss(rec.id)}
-                        className={`flex-1 py-3 px-6 bg-gradient-to-r ${getPriorityColor(rec.priority)} text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-shadow`}
+                        onClick={() => setShowConfirm(rec.id)}
+                        disabled={executingId === rec.id}
+                        className={`flex-1 py-3 px-6 bg-gradient-to-r ${getPriorityColor(rec.priority)} text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2`}
                       >
-                        Take Action
-                      </motion.button>
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        className="px-6 py-3 bg-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-300 transition-colors"
-                      >
-                        Learn More
+                        {executingId === rec.id ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Executing...
+                          </>
+                        ) : (
+                          <>
+                            <Zap size={20} />
+                            Execute Action
+                          </>
+                        )}
                       </motion.button>
                       <motion.button
                         whileHover={{ scale: 1.05 }}
@@ -240,6 +275,36 @@ export default function RecommendationAgentUI() {
                         <XCircle size={24} />
                       </motion.button>
                     </div>
+
+                    {/* Confirmation Dialog */}
+                    {showConfirm === rec.id && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mt-4 p-4 bg-yellow-50 border-2 border-yellow-300 rounded-xl"
+                      >
+                        <p className="text-sm font-semibold text-yellow-900 mb-3">
+                          ⚠️ Confirm Action Execution
+                        </p>
+                        <p className="text-xs text-gray-700 mb-3">
+                          This will implement "{rec.action}" and update city metrics. This action cannot be undone.
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleExecute(rec)}
+                            className="flex-1 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700"
+                          >
+                            Confirm Execute
+                          </button>
+                          <button
+                            onClick={() => setShowConfirm(null)}
+                            className="flex-1 py-2 bg-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-400"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -247,6 +312,45 @@ export default function RecommendationAgentUI() {
           })}
         </AnimatePresence>
       </div>
+
+      {/* Action History Log */}
+      {executedActions.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl shadow-xl p-6"
+        >
+          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <CheckCircle2 className="text-green-600" />
+            Executed Actions History
+          </h3>
+          <div className="space-y-3">
+            {executedActions.map((action: any, index: number) => (
+              <motion.div
+                key={action.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-xl"
+              >
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="text-green-600" size={24} />
+                  <div>
+                    <p className="font-semibold text-gray-800">{action.action}</p>
+                    <p className="text-xs text-gray-500">
+                      {new Date(action.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-bold text-green-600">+{action.impact}</div>
+                  <div className="text-xs text-gray-500">ESG Impact</div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {filteredRecs.length === 0 && (
         <motion.div
