@@ -8,6 +8,7 @@ An interactive, animated, and AI-powered ESG & Sustainability platform for India
 ![Next.js](https://img.shields.io/badge/Next.js-14.1-black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)
 ![Framer Motion](https://img.shields.io/badge/Framer%20Motion-11.0-pink)
+hi
 
 ---
 
